@@ -7,33 +7,58 @@ on:
       - reopened
       - synchronize
 
-# This permissions block grants the GITHUB_TOKEN
-# the necessary write access for pull requests.
+# This permissions block grants the GITHUB_TOKEN the necessary write access for pull requests.
 permissions:
   pull-requests: write
-  
+  contents: read
+
 jobs:
   deploy:
-    runs-on: ubuntu-latest
-    
+    runs-on: <TAG> #Use your desired Self-Hosted runner tag
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Provision and Deploy to Sandbox
-        # Replace this step with your actual cloud deployment logic.
-        # This is a placeholder that simulates a deployment.
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+          architecture: 'x64'
+
+      - name: Install dependencies
         run: |
-          echo "Provisioning sandbox for PR ${{ github.event.number }}..."
-          # Example:
-          # Your cloud provider CLI commands here to create a new namespace, VM, etc.
-          # deploy.sh --environment sandbox --pr-number ${{ github.event.number }}
-          # The deployment script should return a unique URL for the sandbox.
-          echo "Sandbox URL: https://sandbox-pr-${{ github.event.number }}.your-company.com" > sandbox_url.txt
-          echo "Deployment successful."
+          py -m ensurepip
+          py -m pip install --upgrade pip
+          py -m pip install --upgrade pip
+          py -m pip install pyinstaller
+          py -m pip install -r requirements.txt
+
+      #If you wish to build an exe un comment the following lines
+      #- name: Build EXE with PyInstaller
+      #  run: |
+      #    py -m PyInstaller --onefile --name <APPNAME> main.py
+          # The .exe will be at dist\<APPNAME>.exe
+
+      - name: Deploy to sandbox directory
+        shell: powershell
+        run: |
+          # $pr = ${{ github.event.number }}
+          # $deployPath = "C:\Sandbox\PR-$pr"
+          # Remove-Item -Recurse -Force $deployPath -ErrorAction SilentlyContinue
+          # New-Item -ItemType Directory -Path $deployPath
+          # Copy-Item -Path "dist\<APPNAME>.exe" -Destination $deployPath
+
+          # Optional: Copy other resources (config, assets, etc.):
+          # Copy-Item -Path "config.json" -Destination $deployPath
+
+          # Determine the accessible URL:
+          # If using Tailscale IP or alias with reverse proxy:
+          # $url = "https://sandbox-pr-$pr.your-company.com"
+          $url = "URL Not implemented for this deployment"
+          $url | Out-File sandbox_url.txt
 
       - name: Comment on Pull Request
-        # This uses the GitHub CLI to post a comment with the sandbox URL.
         uses: actions/github-script@v6
         with:
           script: |
@@ -43,5 +68,5 @@ jobs:
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: `🚀 Sandbox environment deployed! You can access it here: ${sandboxUrl}`
+              body: `🚀 Sandbox deployed: ${sandboxUrl}`
             });
