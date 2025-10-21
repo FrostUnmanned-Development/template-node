@@ -1,0 +1,11 @@
+{
+    "node_name": "template_node",
+    "node_port": 14560,
+    "master_core_host": "localhost",
+    "master_core_port": 14550,
+    "direct_communication": true,
+    "emergency_nodes": [],
+    
+    "my_timeout": 30,
+    "my_setting": "default_value"
+}

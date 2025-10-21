@@ -1,0 +1,12 @@
+# Template Node Requirements
+
+python-daemon>=3.0.0
+pathlib2>=2.3.7
+
+# Testing
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# Development
+black>=23.0.0
+flake8>=6.0.0
