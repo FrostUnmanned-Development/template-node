@@ -1,6 +1,6 @@
 # OBS01PY Node Development Template
 
-This template provides everything you need to develop a new node for the OBS01PY system.
+This template provides everything you need to develop a new node for the OBS01PY system. It's designed to reduce development overhead and ensure consistency across all nodes.
 
 ## 🚀 Quick Start
 
@@ -28,6 +28,35 @@ cd my-new-node/
 ```bash
 python src/template_node/template_node.py
 ```
+
+## 🎯 What You Get Out of the Box
+
+### **BaseNode Integration**
+- ✅ **Inherits all IPC communication capabilities** from BaseNode
+- ✅ **Standardized message handling** for COMMAND, RESPONSE, STATUS, EMERGENCY, HEARTBEAT, DATA
+- ✅ **Priority system** with LOW, NORMAL, HIGH, CRITICAL, EMERGENCY levels
+- ✅ **Direct node communication** for emergency scenarios
+- ✅ **Automatic heartbeat** and health monitoring
+- ✅ **Message acknowledgment** and timeout handling
+- ✅ **Error handling** and logging infrastructure
+
+### **Configuration Management**
+- ✅ **JSON-based configuration** with validation
+- ✅ **Environment-specific configs** (dev, test, prod)
+- ✅ **Default values** and configuration inheritance
+- ✅ **Runtime configuration updates**
+
+### **Testing Framework**
+- ✅ **Unit test templates** with pytest
+- ✅ **Integration test examples**
+- ✅ **Mock objects** for testing IPC communication
+- ✅ **Test data fixtures** and utilities
+
+### **Documentation**
+- ✅ **Complete API documentation**
+- ✅ **Usage examples** and patterns
+- ✅ **Troubleshooting guide**
+- ✅ **Best practices** and conventions
 
 ## 📁 Template Structure
 
@@ -82,7 +111,7 @@ Edit `config.json`:
     "node_name": "my_node",
     "node_port": 14560,
     "master_core_host": "localhost",
-    "master_core_port": 14550,
+    "master_core_port": 14551,
     "direct_communication": true,
     "emergency_nodes": ["can_controller"],
     
@@ -103,7 +132,7 @@ def _handle_custom_message(self, message, addr):
         
         # Send response
         response = NodeMessage(
-            id=str(uuid.uuid4()),
+            message_id=str(uuid.uuid4()),
             type=MessageType.RESPONSE,
             priority=Priority.NORMAL,
             source=self.node_name,
@@ -285,6 +314,33 @@ def health_check(self):
         logger.error(f"Health check failed: {e}")
         return False
 ```
+
+## 💡 Development Tips
+
+### 1. Start Simple
+- Begin with basic functionality
+- Add complexity gradually
+- Test each feature before moving on
+
+### 2. Use the BaseNode Features
+- Leverage built-in message handling
+- Use the priority system appropriately
+- Implement proper error handling
+
+### 3. Follow the Patterns
+- Study existing nodes (CAN Controller, DB Client)
+- Use consistent naming conventions
+- Follow the established architecture
+
+### 4. Test Early and Often
+- Write tests as you develop
+- Test integration with other nodes
+- Use the testing framework provided
+
+### 5. Document Everything
+- Comment your code
+- Update documentation as you develop
+- Include usage examples
 
 ## 📖 Documentation
 
