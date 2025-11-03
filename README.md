@@ -143,10 +143,64 @@ def _handle_custom_message(self, message, addr):
         self._send_message(response, addr)
 ```
 
-### 4. Direct Communication
+### 4. Database Querying
+
+BaseNode provides built-in support for querying the database via the DB Client node:
 
 ```python
-# Send message to another node
+# Simple query
+node.query_db(
+    collection="System",
+    limit=10
+)
+
+# Query with filter
+node.query_db(
+    collection="System",
+    query_filter={"status": "ONLINE"},
+    limit=10
+)
+
+# Query with sort
+node.query_db(
+    collection="System",
+    query_filter={"name": "Arrow 600 MVP"},
+    sort=[("startuptime", -1)],  # Sort by startuptime descending
+    limit=10
+)
+
+# Query with callback (async response handling)
+def handle_query_response(message, addr):
+    if message.payload.get("status") == "success":
+        results = message.payload.get("query_results", [])
+        print(f"Received {len(results)} documents")
+        for doc in results:
+            print(f"  - {doc.get('name', 'Unknown')}")
+
+node.query_db(
+    collection="System",
+    query_filter={"status": "ONLINE"},
+    callback=handle_query_response
+)
+```
+
+**Note:** Ensure your node config includes the DB client in `known_nodes`:
+```json
+{
+    "known_nodes": {
+        "db_client": {
+            "host": "localhost",
+            "port": 14552
+        }
+    }
+}
+```
+
+### 5. Direct Node Communication
+
+You can send messages directly to other nodes:
+
+```python
 self.send_to_node("can_controller", MessageType.COMMAND, {
     "command": "subscribe_data",
     "subscriber": self.node_name
@@ -159,7 +213,7 @@ self.send_emergency(["engine", "steering"], {
 })
 ```
 
-### 5. Status Reporting
+### 6. Status Reporting
 
 ```python
 def get_my_status(self):
