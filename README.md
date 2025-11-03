@@ -39,12 +39,33 @@ python src/template_node/template_node.py
 - ✅ **Automatic heartbeat** and health monitoring
 - ✅ **Message acknowledgment** and timeout handling
 - ✅ **Error handling** and logging infrastructure
+- ✅ **Built-in database querying** via DB Client node with FILTER, SORT, and async callbacks
 
 ### **Configuration Management**
 - ✅ **JSON-based configuration** with validation
 - ✅ **Environment-specific configs** (dev, test, prod)
 - ✅ **Default values** and configuration inheritance
 - ✅ **Runtime configuration updates**
+
+### **Database Integration**
+- ✅ **Query database via IPC** using `node.query_db()` method
+- ✅ **Filter and sort results** with MongoDB-style queries
+- ✅ **Async response handling** with callbacks
+- ✅ **Real-time data streaming** - query continuously for latest values (e.g., heading, position)
+- ✅ **No direct DB connection needed** - all queries go through DB Client node
+- ✅ **See complete camera node example** below (Section 4) for heading queries
+
+**Quick Example:**
+```python
+# Get latest heading value (for camera pointing north)
+node.query_db(
+    collection="Navigation",
+    query_filter={"title": "heading"},
+    sort=[("timestamp", -1)],  # Most recent first
+    limit=1,
+    callback=lambda msg, addr: print(f"Heading: {msg.payload['query_results'][0]['heading']}")
+)
+```
 
 ### **Testing Framework**
 - ✅ **Unit test templates** with pytest
@@ -195,6 +216,94 @@ node.query_db(
     }
 }
 ```
+
+#### Real-World Example: Camera Node Querying Heading Values
+
+Here's a complete example of a camera node that needs to query heading values to point north:
+
+```python
+from base_node import BaseNode, MessageType, Priority, NodeMessage
+import time
+
+class CameraNode(BaseNode):
+    def __init__(self, config):
+        super().__init__("camera_node", config)
+        self.current_heading = None
+        self.heading_update_interval = 1.0  # Query every second
+        
+    def start(self):
+        super().start()
+        # Register handler for DB query responses
+        self.register_handler("response", self._handle_db_response)
+        
+        # Start periodic heading queries
+        self._start_heading_monitor()
+    
+    def _handle_db_response(self, message: NodeMessage, addr: tuple):
+        """Handle response from DB client"""
+        payload = message.payload
+        if payload.get("status") == "success":
+            results = payload.get("query_results", [])
+            if results:
+                # Get the most recent heading value
+                latest_heading = results[0]
+                self.current_heading = latest_heading.get("heading", 0)
+                self._adjust_camera_orientation()
+    
+    def _start_heading_monitor(self):
+        """Continuously query latest heading value"""
+        import threading
+        
+        def monitor_loop():
+            while self.running:
+                # Query latest heading from Navigation collection
+                self.query_db(
+                    collection="Navigation",
+                    query_filter={"title": "heading"},  # Filter for heading messages
+                    sort=[("timestamp", -1)],  # Most recent first
+                    limit=1,  # Only need the latest
+                    callback=self._handle_db_response
+                )
+                time.sleep(self.heading_update_interval)
+        
+        thread = threading.Thread(target=monitor_loop, daemon=True)
+        thread.start()
+    
+    def _adjust_camera_orientation(self):
+        """Adjust camera to point north based on current heading"""
+        if self.current_heading is not None:
+            # Calculate adjustment needed (heading is typically 0-360 degrees)
+            # North is typically 0 or 360, so adjust accordingly
+            adjustment = -self.current_heading
+            print(f"Adjusting camera by {adjustment}° to point north")
+            # Your camera control logic here
+            # e.g., self.camera.pan(adjustment)
+    
+    def get_current_heading(self):
+        """Get the most recent heading value (one-time query)"""
+        def callback(message, addr):
+            payload = message.payload
+            if payload.get("status") == "success":
+                results = payload.get("query_results", [])
+                if results:
+                    return results[0].get("heading")
+        
+        self.query_db(
+            collection="Navigation",
+            query_filter={"title": "heading"},
+            sort=[("timestamp", -1)],
+            limit=1,
+            callback=callback
+        )
+```
+
+**Key Points:**
+- Use `query_db()` for simple one-time queries or with callbacks for async responses
+- Filter by `title` field to find specific message types (e.g., "heading", "latitude-longitude")
+- Use `sort=[("timestamp", -1)]` to get the most recent data first
+- Set `limit=1` when you only need the latest value
+- Register a response handler to process async query results
+- Use threading for continuous monitoring/streaming scenarios
 
 ### 5. Direct Node Communication
 
