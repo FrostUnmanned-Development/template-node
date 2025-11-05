@@ -11,10 +11,10 @@ from typing import Dict, Any
 import json
 import sys
 
-# Add parent directory to path for base_node import
-sys.path.append(str(Path(__file__).parent.parent.parent.parent / "src" / "onboard_core"))
+# Import BaseNode from template_node package
+sys.path.append(str(Path(__file__).parent.parent / "src"))
 
-from base_node import BaseNode, MessageType, Priority, NodeMessage
+from template_node.base_node import BaseNode, MessageType, Priority, NodeMessage
 import uuid
 
 logger = logging.getLogger(__name__)
@@ -41,7 +41,7 @@ class SimpleNode(BaseNode):
         
         # Send response
         response = NodeMessage(
-            id=str(uuid.uuid4()),
+            message_id=str(uuid.uuid4()),
             type=MessageType.RESPONSE,
             priority=Priority.NORMAL,
             source=self.node_name,

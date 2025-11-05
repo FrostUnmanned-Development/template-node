@@ -14,10 +14,14 @@ import os
 import sys
 import uuid
 
-# Add parent directory to path for base_node import
-sys.path.append(str(Path(__file__).parent.parent.parent.parent.parent / "src" / "onboard_core"))
-
-from base_node import BaseNode, MessageType, Priority, NodeMessage
+# Import BaseNode from same package (with fallback for direct execution)
+try:
+    from .base_node import BaseNode, MessageType, Priority, NodeMessage
+except ImportError:
+    # Fallback for direct execution (not as package)
+    import sys
+    sys.path.insert(0, str(Path(__file__).parent.parent))
+    from template_node.base_node import BaseNode, MessageType, Priority, NodeMessage
 
 logger = logging.getLogger(__name__)
 
@@ -190,7 +194,7 @@ class TemplateNode(BaseNode):
     def _send_response(self, original_message: NodeMessage, data: Dict[str, Any], addr: tuple):
         """Send response message"""
         response = NodeMessage(
-            id=str(uuid.uuid4()),
+            message_id=str(uuid.uuid4()),
             type=MessageType.RESPONSE,
             priority=Priority.NORMAL,
             source=self.node_name,
@@ -203,7 +207,7 @@ class TemplateNode(BaseNode):
     def _send_error_response(self, original_message: NodeMessage, error: str, addr: tuple):
         """Send error response message"""
         response = NodeMessage(
-            id=str(uuid.uuid4()),
+            message_id=str(uuid.uuid4()),
             type=MessageType.RESPONSE,
             priority=Priority.HIGH,
             source=self.node_name,
