@@ -15,6 +15,7 @@ import sys
 import uuid
 import platform
 import tempfile
+import argparse
 
 # Import BaseNode from same package (with fallback for direct execution)
 try:
@@ -232,8 +233,6 @@ class TemplateNode(BaseNode):
 
 def main():
     """Main entry point for Template Node"""
-    import argparse
-    
     parser = argparse.ArgumentParser(description="Template Node")
     parser.add_argument("--config", default="config.json", help="Configuration file")
     parser.add_argument("--daemon", action="store_true", help="Run as daemon")
@@ -318,8 +317,7 @@ def main():
                     node.stop()
             except ImportError:
                 # Fallback to simple fork if daemon library not available
-                import os
-                import sys
+                # os and sys are already imported at top of file
                 
                 try:
                     pid = os.fork()
