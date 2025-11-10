@@ -264,13 +264,20 @@ def main():
     node = TemplateNode(config)
     
     if args.daemon:
-        # Run as daemon
-        import daemon
-        from daemon.pidfile import PIDLockFile
+        # Run as daemon (cross-platform)
+        import platform
+        import tempfile
         
-        pidfile = PIDLockFile('/tmp/template_node.pid')
-        
-        with daemon.DaemonContext(pidfile=pidfile):
+        # Windows doesn't support python-daemon library
+        if platform.system() == 'Windows':
+            # Windows: Run in background without daemon library
+            # Write PID file to temp directory
+            temp_dir = tempfile.gettempdir()
+            pid_file = os.path.join(temp_dir, 'template_node.pid')
+            with open(pid_file, 'w') as f:
+                f.write(str(os.getpid()))
+            
+            logger.info(f"Running as background process on Windows (PID: {os.getpid()})")
             if node.start():
                 try:
                     while True:
@@ -278,6 +285,48 @@ def main():
                 except KeyboardInterrupt:
                     pass
             node.stop()
+        else:
+            # Unix/Linux: Use python-daemon library
+            try:
+                import daemon
+                from daemon.pidfile import PIDLockFile
+                
+                pidfile = PIDLockFile('/tmp/template_node.pid')
+                
+                with daemon.DaemonContext(pidfile=pidfile):
+                    if node.start():
+                        try:
+                            while True:
+                                time.sleep(1)
+                        except KeyboardInterrupt:
+                            pass
+                    node.stop()
+            except ImportError:
+                # Fallback to simple fork if daemon library not available
+                import os
+                import sys
+                
+                try:
+                    pid = os.fork()
+                    if pid > 0:
+                        sys.exit(0)
+                except OSError as e:
+                    logger.error(f"Failed to fork: {e}")
+                    sys.exit(1)
+                
+                os.setsid()
+                os.chdir("/")
+                
+                with open('/tmp/template_node.pid', 'w') as f:
+                    f.write(str(os.getpid()))
+                
+                if node.start():
+                    try:
+                        while True:
+                            time.sleep(1)
+                    except KeyboardInterrupt:
+                        pass
+                node.stop()
     else:
         # Run in foreground
         if node.start():
