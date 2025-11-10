@@ -255,17 +255,27 @@ def main():
         }
     
     # Configure logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    )
+    # On Windows daemon mode, ensure errors go to stderr for Master Core to capture
+    import platform
+    if args.daemon and platform.system() == 'Windows':
+        # Windows daemon: log to stderr so Master Core can capture it
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[logging.StreamHandler(sys.stderr)]
+        )
+    else:
+        # Normal mode: use default stdout
+        logging.basicConfig(
+            level=logging.INFO,
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
     
     # Create and start node
     node = TemplateNode(config)
     
     if args.daemon:
         # Run as daemon (cross-platform)
-        import platform
         import tempfile
         
         # Windows doesn't support python-daemon library
@@ -279,11 +289,16 @@ def main():
             
             logger.info(f"Running as background process on Windows (PID: {os.getpid()})")
             if node.start():
+                logger.info("Template Node started successfully, entering main loop")
                 try:
                     while True:
                         time.sleep(1)
                 except KeyboardInterrupt:
+                    logger.info("KeyboardInterrupt received, shutting down")
                     pass
+            else:
+                logger.error("Failed to start Template Node, exiting")
+                sys.exit(1)
             node.stop()
         else:
             # Unix/Linux: Use python-daemon library
