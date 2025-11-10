@@ -13,13 +13,15 @@ import json
 import os
 import sys
 import uuid
+import platform
+import tempfile
 
 # Import BaseNode from same package (with fallback for direct execution)
 try:
     from .base_node import BaseNode, MessageType, Priority, NodeMessage
 except ImportError:
     # Fallback for direct execution (not as package)
-    import sys
+    # sys is already imported at top of file
     sys.path.insert(0, str(Path(__file__).parent.parent))
     from template_node.base_node import BaseNode, MessageType, Priority, NodeMessage
 
@@ -256,7 +258,6 @@ def main():
     
     # Configure logging
     # On Windows daemon mode, ensure errors go to stderr for Master Core to capture
-    import platform
     if args.daemon and platform.system() == 'Windows':
         # Windows daemon: log to stderr so Master Core can capture it
         logging.basicConfig(
@@ -276,7 +277,6 @@ def main():
     
     if args.daemon:
         # Run as daemon (cross-platform)
-        import tempfile
         
         # Windows doesn't support python-daemon library
         if platform.system() == 'Windows':
