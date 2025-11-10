@@ -31,6 +31,7 @@ class MessageType(Enum):
     EMERGENCY = "emergency"
     HEARTBEAT = "heartbeat"
     DATA = "data"
+    CONFIG_UPDATE = "config_update"
 
 class Priority(Enum):
     """Message priority levels"""
@@ -68,7 +69,7 @@ class BaseNode:
     
     def __init__(self, node_name: str, config: Dict[str, Any]):
         self.node_name = node_name
-        self.config = config
+        self.config = config  # Local node config (for testing/override)
         self.node_id = str(uuid.uuid4())
         self.status = "INITIALIZING"
         self.last_heartbeat = time.time()
@@ -81,6 +82,9 @@ class BaseNode:
         # Direct communication settings
         self.direct_communication_enabled = config.get("direct_communication", True)
         self.emergency_nodes = config.get("emergency_nodes", [])
+        
+        # Configuration management (Enterprise pattern: Master Core > Local > Default)
+        self.master_core_config: Dict[str, Any] = {}  # Centralized config from Master Core
         
         # Message handling
         self.message_handlers: Dict[str, Callable] = {}
@@ -103,7 +107,8 @@ class BaseNode:
             "heartbeat": self._handle_heartbeat,
             "status": self._handle_status,
             "emergency": self._handle_emergency,
-            "ack": self._handle_ack
+            "ack": self._handle_ack,
+            "config_update": self._handle_config_update
         }
     
     def start(self):
@@ -153,12 +158,13 @@ class BaseNode:
             try:
                 data, addr = self.udp_socket.recvfrom(4096)
                 message_data = json.loads(data.decode('utf-8'))
+                logger.info(f"🔧 [{self.node_name}] Received message from {addr}, type: {message_data.get('type')}, source: {message_data.get('source')}, destination: {message_data.get('destination')}")
                 message = self._deserialize_message(message_data)
                 self._process_message(message, addr)
             except socket.timeout:
                 continue
             except Exception as e:
-                logger.error(f"Error receiving message: {e}")
+                logger.error(f"❌ [{self.node_name}] Error receiving message: {e}")
                 logger.error(f"Error type: {type(e).__name__}")
                 import traceback
                 logger.error(f"Traceback: {traceback.format_exc()}")
@@ -306,13 +312,21 @@ class BaseNode:
         
         # Route to appropriate handler
         handler_key = message.type.value
+        logger.info(f"🔧 [{self.node_name}] Processing message type: '{handler_key}', source: {message.source}, destination: {message.destination}")
+        logger.info(f"🔧 [{self.node_name}] Available handlers: {list(self.message_handlers.keys())}")
+        logger.info(f"🔧 [{self.node_name}] Handler exists for '{handler_key}': {handler_key in self.message_handlers}")
+        
         if handler_key in self.message_handlers:
             try:
+                logger.info(f"🔧 [{self.node_name}] Calling handler for '{handler_key}'")
                 self.message_handlers[handler_key](message, addr)
+                logger.info(f"✅ [{self.node_name}] Handler '{handler_key}' completed")
             except Exception as e:
-                logger.error(f"Error handling {handler_key} message: {e}")
+                logger.error(f"❌ [{self.node_name}] Error handling {handler_key} message: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
         else:
-            logger.warning(f"No handler for message type: {handler_key}")
+            logger.warning(f"⚠️ [{self.node_name}] No handler for message type: '{handler_key}'")
         
         # Send acknowledgment if required
         if message.requires_ack:
@@ -360,6 +374,78 @@ class BaseNode:
     def _handle_ack(self, message: NodeMessage, addr: tuple):
         """Handle acknowledgment messages"""
         logger.debug(f"Acknowledgment received for message {message.payload.get('ack_for')}")
+    
+    def _handle_config_update(self, message: NodeMessage, addr: tuple):
+        """Handle configuration update from Master Core
+        
+        Enterprise pattern: Master Core config takes precedence over local config
+        """
+        logger.info(f"🔧 [{self.node_name}] Received config_update message from {message.source}")
+        config_updates = message.payload.get("config", {})
+        logger.info(f"🔧 [{self.node_name}] Config update payload: {config_updates}")
+        
+        if config_updates:
+            old_config = dict(self.master_core_config)
+            self.master_core_config.update(config_updates)
+            logger.info(f"✅ [{self.node_name}] Configuration updated from Master Core")
+            logger.info(f"   Old config: {old_config}")
+            logger.info(f"   New config: {self.master_core_config}")
+            logger.info(f"   Updated keys: {list(config_updates.keys())}")
+            
+            # Notify subclasses that config was updated (for dynamic reconfiguration)
+            if hasattr(self, 'on_config_updated'):
+                logger.info(f"🔧 [{self.node_name}] Calling on_config_updated() callback")
+                self.on_config_updated(config_updates)
+        else:
+            logger.warning(f"⚠️ [{self.node_name}] Config update message received but payload.config is empty or missing")
+    
+    def get_config_value(self, key: str, default: Any = None) -> Any:
+        """Get configuration value with hierarchy: Master Core > Local > Default
+        
+        Enterprise configuration pattern:
+        1. Master Core config (authoritative, centralized)
+        2. Local node config (override for testing/development)
+        3. Default value (fallback)
+        
+        Args:
+            key: Configuration key to retrieve
+            default: Default value if not found in any config source
+            
+        Returns:
+            Configuration value from highest priority source
+        """
+        # Priority 1: Master Core config (authoritative)
+        if key in self.master_core_config:
+            value = self.master_core_config[key]
+            logger.info(f"🔧 [{self.node_name}] get_config_value('{key}') = {value} (from Master Core)")
+            return value
+        
+        # Priority 2: Local node config (override for testing)
+        if key in self.config:
+            value = self.config[key]
+            logger.info(f"🔧 [{self.node_name}] get_config_value('{key}') = {value} (from local config)")
+            return value
+        
+        # Priority 3: Default value
+        logger.info(f"🔧 [{self.node_name}] get_config_value('{key}') = {default} (using default)")
+        return default
+    
+    def request_config_from_master(self) -> bool:
+        """Request configuration from Master Core
+        
+        Called on startup or when config needs to be refreshed
+        """
+        try:
+            logger.info(f"🔧 [{self.node_name}] Requesting configuration from Master Core at {self.master_core_host}:{self.master_core_port}")
+            payload = {"request_config": True, "node_name": self.node_name}
+            result = self.send_to_master_core(MessageType.COMMAND, payload, Priority.NORMAL)
+            logger.info(f"🔧 [{self.node_name}] Config request sent, result: {result}")
+            return result
+        except Exception as e:
+            logger.error(f"❌ [{self.node_name}] Failed to request config from Master Core: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return False
     
     def _get_node_address(self, node_name: str) -> Optional[tuple]:
         """Get address for a specific node"""
