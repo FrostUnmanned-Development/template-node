@@ -16,6 +16,7 @@ import uuid
 import platform
 import tempfile
 import argparse
+import signal
 
 # Import BaseNode from same package (with fallback for direct execution)
 try:
@@ -231,8 +232,29 @@ class TemplateNode(BaseNode):
         })
         return base_status
 
+# Global variable to track node instance for signal handler
+_node_instance = None
+_running = True
+
+def signal_handler(signum, frame):
+    """Handle SIGINT and SIGTERM signals for graceful shutdown"""
+    global _running
+    signal_name = signal.Signals(signum).name
+    logger.info(f"Received {signal_name} signal, initiating graceful shutdown...")
+    _running = False
+    if _node_instance:
+        _node_instance.stop()
+
 def main():
     """Main entry point for Template Node"""
+    global _node_instance, _running
+    
+    # Register signal handlers for graceful shutdown
+    # SIGINT: Ctrl+C or kill -INT
+    # SIGTERM: systemd/service manager shutdown or kill -TERM
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    
     parser = argparse.ArgumentParser(description="Template Node")
     parser.add_argument("--config", default="config.json", help="Configuration file")
     parser.add_argument("--daemon", action="store_true", help="Run as daemon")
@@ -273,6 +295,7 @@ def main():
     
     # Create and start node
     node = TemplateNode(config)
+    _node_instance = node  # Store for signal handler
     
     if args.daemon:
         # Run as daemon (cross-platform)
@@ -289,12 +312,14 @@ def main():
             logger.info(f"Running as background process on Windows (PID: {os.getpid()})")
             if node.start():
                 logger.info("Template Node started successfully, entering main loop")
+                _running = True
                 try:
-                    while True:
+                    while _running:
                         time.sleep(1)
                 except KeyboardInterrupt:
+                    # Fallback for KeyboardInterrupt
                     logger.info("KeyboardInterrupt received, shutting down")
-                    pass
+                    _running = False
             else:
                 logger.error("Failed to start Template Node, exiting")
                 sys.exit(1)
@@ -320,12 +345,14 @@ def main():
             
             if node.start():
                 logger.info("Template Node started successfully, entering main loop")
+                _running = True
                 try:
-                    while True:
+                    while _running:
                         time.sleep(1)
                 except KeyboardInterrupt:
+                    # Fallback for KeyboardInterrupt
                     logger.info("KeyboardInterrupt received, shutting down")
-                    pass
+                    _running = False
             else:
                 logger.error("Failed to start Template Node")
                 sys.exit(1)
@@ -333,11 +360,14 @@ def main():
     else:
         # Run in foreground
         if node.start():
+            _running = True
             try:
-                while True:
+                while _running:
                     time.sleep(1)
             except KeyboardInterrupt:
-                pass
+                # Fallback for KeyboardInterrupt
+                logger.info("KeyboardInterrupt received, shutting down")
+                _running = False
         node.stop()
 
 if __name__ == "__main__":
