@@ -300,46 +300,36 @@ def main():
                 sys.exit(1)
             node.stop()
         else:
-            # Unix/Linux: Use python-daemon library
+            # Unix/Linux: Use fork approach
             try:
-                import daemon
-                from daemon.pidfile import PIDLockFile
-                
-                pidfile = PIDLockFile('/tmp/template_node.pid')
-                
-                with daemon.DaemonContext(pidfile=pidfile):
-                    if node.start():
-                        try:
-                            while True:
-                                time.sleep(1)
-                        except KeyboardInterrupt:
-                            pass
-                    node.stop()
-            except ImportError:
-                # Fallback to simple fork if daemon library not available
-                # os and sys are already imported at top of file
-                
+                pid = os.fork()
+                if pid > 0:
+                    # Parent process - exit
+                    sys.exit(0)
+            except OSError as e:
+                logger.error(f"Failed to fork: {e}")
+                sys.exit(1)
+            
+            # Child process - continue
+            os.setsid()  # Create new session
+            os.chdir("/")  # Change to root directory
+            
+            # Write PID file
+            with open('/tmp/template_node.pid', 'w') as f:
+                f.write(str(os.getpid()))
+            
+            if node.start():
+                logger.info("Template Node started successfully, entering main loop")
                 try:
-                    pid = os.fork()
-                    if pid > 0:
-                        sys.exit(0)
-                except OSError as e:
-                    logger.error(f"Failed to fork: {e}")
-                    sys.exit(1)
-                
-                os.setsid()
-                os.chdir("/")
-                
-                with open('/tmp/template_node.pid', 'w') as f:
-                    f.write(str(os.getpid()))
-                
-                if node.start():
-                    try:
-                        while True:
-                            time.sleep(1)
-                    except KeyboardInterrupt:
-                        pass
-                node.stop()
+                    while True:
+                        time.sleep(1)
+                except KeyboardInterrupt:
+                    logger.info("KeyboardInterrupt received, shutting down")
+                    pass
+            else:
+                logger.error("Failed to start Template Node")
+                sys.exit(1)
+            node.stop()
     else:
         # Run in foreground
         if node.start():
