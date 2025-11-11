@@ -339,8 +339,10 @@ def main():
             os.setsid()  # Create new session
             os.chdir("/")  # Change to root directory
             
-            # Write PID file
-            with open('/tmp/template_node.pid', 'w') as f:
+            # Write PID file (use temp directory for cross-platform consistency)
+            temp_dir = tempfile.gettempdir()
+            pid_file = os.path.join(temp_dir, 'template_node.pid')
+            with open(pid_file, 'w') as f:
                 f.write(str(os.getpid()))
             
             if node.start():
