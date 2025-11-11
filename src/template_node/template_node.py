@@ -106,8 +106,11 @@ class TemplateNode(BaseNode):
         self.my_data["last_update"] = current_time
         self.my_data["uptime"] = current_time - self.last_heartbeat
         
-        # Example: Send periodic status to master core
+        # Send heartbeat to master core for connection state tracking (every 10 seconds)
         if int(current_time) % 10 == 0:  # Every 10 seconds
+            self.send_heartbeat()
+            
+            # Example: Send periodic status to master core
             self.send_to_master_core(
                 MessageType.STATUS,
                 {"background_status": "running", "data_count": len(self.my_data)},
